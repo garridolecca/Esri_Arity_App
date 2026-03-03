@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en" class="calcite-mode-dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Arity x Nordstrom Rack | Retail Site Intelligence</title>
+  <link rel="stylesheet" href="https://js.arcgis.com/4.30/esri/themes/dark/main.css">
+  <link rel="stylesheet" href="https://js.arcgis.com/calcite-components/2.13.2/calcite.css">
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; font-family: "Avenir Next", "Helvetica Neue", sans-serif; }
+    #viewDiv { width: 100%; height: 100%; }
+    /* Splash */
+    #splash { position: fixed; inset: 0; background: linear-gradient(135deg, #070b1a 0%, #0f1a3a 50%, #0a1628 100%); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+    #splash.hidden { opacity: 0; pointer-events: none; transition: opacity 0.6s ease; }
+    .splash-inner { text-align: center; max-width: 520px; padding: 40px; }
+    .splash-logo { font-size: 2.6em; font-weight: 300; color: #e0e0e0; letter-spacing: 3px; margin-bottom: 6px; }
+    .splash-logo span { color: #00bcd4; font-weight: 400; }
+    .splash-sub { font-size: 1.05em; color: #6b7b8d; margin-bottom: 36px; letter-spacing: 1px; }
+    .splash-desc { font-size: 0.88em; color: #4a5568; margin-bottom: 28px; line-height: 1.7; }
+    .splash-note { margin-top: 14px; font-size: 0.73em; color: #3d4a5c; }
+    /* Panel results */
+    .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+    .stat-grid.two-col { grid-template-columns: repeat(2, 1fr); }
+    .stat-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 12px 8px; text-align: center; }
+    .stat-value { font-size: 1.25em; font-weight: 700; color: #00bcd4; }
+    .stat-label { font-size: 0.7em; color: #7b8a9e; margin-top: 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+    /* Score */
+    .score-wrap { display: flex; align-items: center; gap: 20px; padding: 8px 0; }
+    .score-circle { position: relative; width: 100px; height: 100px; flex-shrink: 0; }
+    .score-circle svg { width: 100%; height: 100%; }
+    .score-num { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; }
+    .score-num .val { font-size: 1.8em; font-weight: 700; line-height: 1; }
+    .score-num .lbl { font-size: 0.6em; color: #7b8a9e; }
+    .score-bars { flex: 1; }
+    .sbar { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+    .sbar-label { width: 56px; font-size: 0.75em; color: #7b8a9e; }
+    .sbar-track { flex: 1; height: 7px; background: rgba(255,255,255,0.08); border-radius: 4px; overflow: hidden; }
+    .sbar-fill { height: 100%; border-radius: 4px; transition: width 1s ease; }
+    .sbar-val { width: 26px; text-align: right; font-size: 0.8em; font-weight: 600; }
+    /* Brand bars */
+    .brand-row { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+    .brand-name { width: 110px; font-size: 0.78em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #b0bec5; }
+    .brand-track { flex: 1; height: 5px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; }
+    .brand-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, #ff6d00, #ff9100); }
+    .brand-val { width: 50px; text-align: right; font-size: 0.75em; color: #7b8a9e; }
+    /* Recs */
+    .rec { padding: 10px 12px; margin-bottom: 6px; border-radius: 6px; font-size: 0.82em; line-height: 1.5; }
+    .rec-pos { background: rgba(0,230,118,0.07); border-left: 3px solid #00e676; color: #a5d6a7; }
+    .rec-warn { background: rgba(255,214,0,0.07); border-left: 3px solid #ffd600; color: #fff176; }
+    .rec-neg { background: rgba(255,23,68,0.07); border-left: 3px solid #ff1744; color: #ef9a9a; }
+    .hidden { display: none !important; }
+    #customBanner { position: absolute; bottom: 36px; left: 50%; transform: translateX(-50%); background: rgba(0,188,212,0.92); color: #fff; padding: 8px 24px; border-radius: 20px; font-size: 0.88em; z-index: 50; display: none; pointer-events: none; box-shadow: 0 2px 12px rgba(0,188,212,0.3); }
+    .section-title { font-size: 0.78em; color: #7b8a9e; text-transform: uppercase; letter-spacing: 1px; margin: 12px 0 6px 0; }
+    .cat-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 0.85em; }
+    .cat-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+    calcite-shell { height: 100%; }
+  </style>
+</head>
+<body>
+  <!-- Splash Screen -->
+  <div id="splash">
+    <div class="splash-inner">
+      <div class="splash-logo">ARITY <span>x</span> NORDSTROM RACK</div>
+      <div class="splash-sub">Retail Site Intelligence Platform</div>
+      <div class="splash-desc">
+        Leverage Arity connected car movement data to analyze foot traffic patterns,
+        evaluate store locations, and unlock demographic insights with ArcGIS GeoEnrichment.
+      </div>
+      <calcite-input id="apiKeyInput" type="password" placeholder="Enter your ArcGIS API Key" icon="key" scale="l" style="max-width: 420px; margin: 0 auto 16px;"></calcite-input>
+      <calcite-button id="launchBtn" scale="l" icon-start="launch" width="full" style="max-width: 420px;">Launch Application</calcite-button>
+      <div class="splash-note">Requires an ArcGIS Developer API key with basemap and geoenrichment privileges</div>
+    </div>
+  </div>
+
+  <!-- Main App -->
+  <div id="mainApp" class="hidden" style="height:100%;width:100%;">
+    <calcite-shell>
+      <calcite-navigation slot="header">
+        <calcite-navigation-logo slot="logo" heading="Arity x Nordstrom Rack" description="Retail Site Intelligence" icon="urban-model"></calcite-navigation-logo>
+        <div slot="content-end" style="display:flex;align-items:center;gap:10px;padding-right:14px;">
+          <calcite-chip icon="layers" appearance="outline-fill" kind="neutral" scale="s">7,964 Locations</calcite-chip>
+          <calcite-chip icon="car" appearance="outline-fill" kind="brand" scale="s">3.65M Weekly Visits</calcite-chip>
+        </div>
+      </calcite-navigation>
+      <div id="viewDiv"></div>
+      <div id="customBanner">Click on the map to analyze any location</div>
+      <calcite-shell-panel slot="panel-end" position="end" width-scale="l">
+        <calcite-panel heading="Site Analysis" description="Nordstrom Rack Location Intelligence">
+          <!-- Store Selection -->
+          <calcite-block heading="Store Selection" icon-start="pin" open collapsible>
+            <calcite-label>Nordstrom Rack Location
+              <calcite-select id="storeSelect"><calcite-option value="" selected>Select a store...</calcite-option></calcite-select>
+            </calcite-label>
+            <calcite-label style="margin-top:8px;">Analysis Radius
+              <calcite-select id="radiusSelect">
+                <calcite-option value="0.5">0.5 miles</calcite-option>
+                <calcite-option value="1" selected>1 mile</calcite-option>
+                <calcite-option value="2">2 miles</calcite-option>
+                <calcite-option value="3">3 miles</calcite-option>
+                <calcite-option value="5">5 miles</calcite-option>
+              </calcite-select>
+            </calcite-label>
+            <div style="display:flex;gap:8px;margin-top:12px;">
+              <calcite-button id="analyzeBtn" icon-start="analysis" width="full" disabled>Analyze Store</calcite-button>
+            </div>
+            <div style="margin-top:10px;display:flex;align-items:center;">
+              <calcite-switch id="customSwitch"></calcite-switch>
+              <span style="font-size:0.82em;color:#7b8a9e;margin-left:8px;">Click map to analyze custom location</span>
+            </div>
+          </calcite-block>
+          <!-- Enrichment Variables -->
+          <calcite-block heading="Enrichment Variables" icon-start="data-check" collapsible>
+            <calcite-label layout="inline"><calcite-checkbox id="chkDemo" checked></calcite-checkbox>Demographics (Pop, Households, Age)</calcite-label>
+            <calcite-label layout="inline"><calcite-checkbox id="chkIncome" checked></calcite-checkbox>Income &amp; Wealth</calcite-label>
+            <calcite-label layout="inline"><calcite-checkbox id="chkSpending" checked></calcite-checkbox>Consumer Spending</calcite-label>
+            <calcite-label layout="inline"><calcite-checkbox id="chkDaytime"></calcite-checkbox>Daytime Population</calcite-label>
+            <calcite-label layout="inline"><calcite-checkbox id="chkHousing"></calcite-checkbox>Housing (Ownership, Values)</calcite-label>
+            <calcite-label style="margin-top:8px;">Custom Variable
+              <calcite-input id="customVar" placeholder="e.g. KeyUSFacts.DIVINDX_CY" icon="add-layer" clearable scale="s"></calcite-input>
+            </calcite-label>
+          </calcite-block>
+          <!-- Layer Controls -->
+          <calcite-block heading="Layer Controls" icon-start="layers" collapsible>
+            <calcite-label layout="inline"><calcite-switch id="heatSwitch"></calcite-switch>Heatmap View</calcite-label>
+            <calcite-label layout="inline"><calcite-switch id="storeVis" checked></calcite-switch>Nordstrom Rack Locations</calcite-label>
+          </calcite-block>
+          <!-- Loading -->
+          <div id="loadingBox" class="hidden" style="text-align:center;padding:24px;">
+            <calcite-loader label="Analyzing..." type="indeterminate"></calcite-loader>
+            <div style="margin-top:10px;color:#7b8a9e;font-size:0.9em;">Running site analysis...</div>
+          </div>
+          <!-- Results -->
+          <div id="resultsBox" class="hidden">
+            <calcite-block heading="Site Score" icon-start="gauge" open collapsible><div id="scoreContent"></div></calcite-block>
+            <calcite-block heading="Area Demographics" icon-start="group" open collapsible><div id="demoContent"></div></calcite-block>
+            <calcite-block heading="Traffic Intelligence" icon-start="car" open collapsible><div id="trafficContent"></div></calcite-block>
+            <calcite-block heading="Strategic Insights" icon-start="lightbulb" open collapsible><div id="recsContent"></div></calcite-block>
+          </div>
+        </calcite-panel>
+      </calcite-shell-panel>
+    </calcite-shell>
+  </div>
+
+  <script type="module" src="https://js.arcgis.com/calcite-components/2.13.2/calcite.esm.js"></script>
+  <script src="https://js.arcgis.com/4.30/"></script>
+  <script>
+    // ============================================================
+    // CONFIGURATION
+    // ============================================================
+    const STORES = [
+      { id:1,  name:"Downtown LA (FIGat7th)",   lat:34.0488, lon:-118.2598, address:"735 S Figueroa St, Los Angeles, CA 90017" },
+      { id:2,  name:"Beverly Connection",        lat:34.0756, lon:-118.3764, address:"100 N La Cienega Blvd, Los Angeles, CA 90048" },
+      { id:3,  name:"Culver City",               lat:33.9825, lon:-118.3965, address:"6000 Sepulveda Blvd, Culver City, CA 90230" },
+      { id:4,  name:"Burbank Empire Center",     lat:34.1853, lon:-118.3482, address:"1601 N Victory Pl, Burbank, CA 91502" },
+      { id:5,  name:"Glendale",                  lat:34.1480, lon:-118.2468, address:"227 N Glendale Ave, Glendale, CA 91206" },
+      { id:6,  name:"Pasadena",                  lat:34.1467, lon:-118.0827, address:"3363 E Foothill Blvd, Pasadena, CA 91107" },
+      { id:7,  name:"North Hollywood (NoHo West)",lat:34.1873,lon:-118.3930, address:"6150 Laurel Canyon Blvd, North Hollywood, CA 91606" },
+      { id:8,  name:"Woodland Hills",            lat:34.1838, lon:-118.5998, address:"21490 Victory Blvd, Woodland Hills, CA 91367" },
+      { id:9,  name:"Porter Ranch",              lat:34.2810, lon:-118.5641, address:"20039 W Rinaldi St, Porter Ranch, CA 91326" },
+      { id:10, name:"Northridge",                lat:34.2384, lon:-118.5318, address:"9301 Tampa Ave, Northridge, CA 91324" },
+      { id:11, name:"Redondo Beach",             lat:33.8617, lon:-118.3527, address:"1517 Hawthorne Blvd, Redondo Beach, CA 90278" },
+      { id:12, name:"West Covina",               lat:34.0686, lon:-117.9300, address:"1415 Plaza Dr, West Covina, CA 91790" },
+      { id:13, name:"Outlets at Orange",         lat:33.7833, lon:-117.8636, address:"20 City Blvd W, Orange, CA 92868" },
+      { id:14, name:"Anaheim Hills",             lat:33.8477, lon:-117.7455, address:"8140 E Santa Ana Canyon Rd, Anaheim, CA 92808" },
+      { id:15, name:"Brea",                      lat:33.9222, lon:-117.8692, address:"2345 E Imperial Hwy, Brea, CA 92821" },
+      { id:16, name:"Tustin",                    lat:33.7292, lon:-117.8050, address:"2882 El Camino Real, Tustin, CA 92782" },
+      { id:17, name:"Laguna Hills",              lat:33.5969, lon:-117.7085, address:"23541 Calle De La Louisa, Laguna Hills, CA 92653" },
+      { id:18, name:"Chino",                     lat:33.9773, lon:-117.6876, address:"3849 Grand Ave, Chino, CA 91710" },
+      { id:19, name:"Oxnard",                    lat:34.1908, lon:-119.1617, address:"261 Esplanade Dr, Oxnard, CA 93030" },
+      { id:20, name:"Tarzana",                   lat:34.1720, lon:-118.5507, address:"18700 W Ventura Blvd, Tarzana, CA 91356" }
+    ];
+
+    const GEOENRICH_URL = "https://geoenrich.arcgis.com/arcgis/rest/services/World/geoenrichmentserver/Geoenrichment/enrich";
+    const VAR_GROUPS = {
+      demo:    ["KeyUSFacts.TOTPOP_CY","KeyUSFacts.TOTHH_CY","KeyUSFacts.AVGHHSZ_CY","KeyUSFacts.MEDAGE_CY"],
+      income:  ["KeyUSFacts.MEDHINC_CY","KeyUSFacts.PCI_CY","KeyUSFacts.AVGHINC_CY"],
+      spending:["KeyUSFacts.MEDVAL_CY"],
+      daytime: ["KeyUSFacts.DPOP_CY","KeyUSFacts.DPOPWRK_CY","KeyUSFacts.DPOPRES_CY"],
+      housing: ["KeyUSFacts.OWNER_CY","KeyUSFacts.RENTER_CY","KeyUSFacts.MEDVAL_CY","KeyUSFacts.AVGVAL_CY"]
+    };
+    const VAR_META = {
+      "TOTPOP_CY":  { label:"Population",      fmt:"num" },
+      "TOTHH_CY":   { label:"Households",       fmt:"num" },
+      "AVGHHSZ_CY": { label:"Avg HH Size",      fmt:"dec" },
+      "MEDAGE_CY":  { label:"Median Age",        fmt:"dec" },
+      "MEDHINC_CY": { label:"Median HH Income",  fmt:"cur" },
+      "PCI_CY":     { label:"Per Capita Income",  fmt:"cur" },
+      "AVGHINC_CY": { label:"Avg HH Income",      fmt:"cur" },
+      "DPOP_CY":    { label:"Daytime Pop",        fmt:"num" },
+      "DPOPWRK_CY": { label:"Daytime Workers",    fmt:"num" },
+      "DPOPRES_CY": { label:"Daytime Residents",  fmt:"num" },
+      "OWNER_CY":   { label:"Owner-Occupied",     fmt:"num" },
+      "RENTER_CY":  { label:"Renter-Occupied",    fmt:"num" },
+      "MEDVAL_CY":  { label:"Median Home Value",  fmt:"cur" },
+      "AVGVAL_CY":  { label:"Avg Home Value",     fmt:"cur" },
+      "DIVINDX_CY": { label:"Diversity Index",    fmt:"dec" }
+    };
+
+    let apiKey, mapView, arityLayer, storeLayer, gfxLayer;
+    let pointRenderer, customMode = false;
+
+    // ============================================================
+    // LAUNCH
+    // ============================================================
+    document.getElementById("launchBtn").addEventListener("click", () => {
+      const key = document.getElementById("apiKeyInput").value.trim();
+      if (!key) { document.getElementById("apiKeyInput").setFocus(); return; }
+      apiKey = key;
+      document.getElementById("splash").classList.add("hidden");
+      document.getElementById("mainApp").classList.remove("hidden");
+      initApp();
+    });
+    document.getElementById("apiKeyInput").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") document.getElementById("launchBtn").click();
+    });
+
+    // ============================================================
+    // INIT
+    // ============================================================
+    function initApp() {
+      require([
+        "esri/Map","esri/views/MapView","esri/layers/GeoJSONLayer",
+        "esri/layers/GraphicsLayer","esri/layers/FeatureLayer","esri/Graphic",
+        "esri/geometry/Point","esri/geometry/geometryEngine",
+        "esri/widgets/Legend","esri/widgets/Home","esri/widgets/Expand","esri/config"
+      ], function(Map, MapView, GeoJSONLayer, GraphicsLayer, FeatureLayer, Graphic, Point, geometryEngine, Legend, Home, Expand, esriConfig) {
+
+        esriConfig.apiKey = apiKey;
+
+        const map = new Map({ basemap: "dark-gray-vector" });
+        mapView = new MapView({
+          container: "viewDiv", map: map,
+          center: [-118.15, 34.0], zoom: 9,
+          popup: { dockEnabled: true, dockOptions: { position: "bottom-left", breakpoint: false } }
+        });
+
+        // --- Analysis Graphics Layer ---
+        gfxLayer = new GraphicsLayer({ title: "Analysis Area", listMode: "hide" });
+        map.add(gfxLayer);
+
+        // --- Arity Layer ---
+        const renderer = {
+          type: "simple",
+          symbol: { type: "simple-marker", style: "circle", size: 6, color: [255,138,101,0.7], outline: { color: [255,87,34,0.4], width: 0.5 } },
+          visualVariables: [
+            { type: "size", field: "total_visits",
+              stops: [{ value:20, size:4 },{ value:300, size:10 },{ value:1500, size:18 },{ value:5000, size:28 }] },
+            { type: "color", field: "avg_daily_visits",
+              stops: [{ value:5, color:"#4575b4" },{ value:40, color:"#fee090" },{ value:120, color:"#f46d43" },{ value:350, color:"#a50026" }] },
+            { type: "opacity", field: "total_visits",
+              stops: [{ value:10, opacity:0.45 },{ value:800, opacity:0.95 }] }
+          ]
+        };
+        arityLayer = new GeoJSONLayer({
+          url: "data/arity_visits.geojson", title: "Arity Visit Data",
+          copyright: "Arity Connected Car Data",
+          renderer: renderer,
+          popupTemplate: {
+            title: "<span style='color:#00bcd4'>{brand}</span>",
+            content: [{ type: "fields", fieldInfos: [
+              { fieldName: "street_address", label: "Address" },
+              { fieldName: "city", label: "City" },
+              { fieldName: "sub_category", label: "Category" },
+              { fieldName: "total_visits", label: "Total Weekly Visits", format: { digitSeparator: true, places: 0 } },
+              { fieldName: "avg_daily_visits", label: "Avg Daily Visits", format: { places: 1 } },
+              { fieldName: "max_daily_visits", label: "Peak Daily Visits", format: { digitSeparator: true, places: 0 } }
+            ]}]
+          },
+          orderBy: [{ field: "total_visits", order: "ascending" }]
+        });
+        map.add(arityLayer);
+        pointRenderer = renderer;
+
+        // --- Nordstrom Rack Layer ---
+        const storeGraphics = STORES.map(s => new Graphic({
+          geometry: { type: "point", longitude: s.lon, latitude: s.lat },
+          attributes: { ObjectID: s.id, name: s.name, address: s.address }
+        }));
+        storeLayer = new FeatureLayer({
+          source: storeGraphics, objectIdField: "ObjectID",
+          fields: [
+            { name: "ObjectID", type: "oid" },
+            { name: "name", type: "string" },
+            { name: "address", type: "string" }
+          ],
+          title: "Nordstrom Rack Stores",
+          renderer: { type: "simple", symbol: {
+            type: "simple-marker", style: "diamond", size: 14,
+            color: [0,229,255,0.9], outline: { color: [255,255,255,1], width: 2 }
+          }},
+          popupTemplate: { title: "Nordstrom Rack - {name}", content: "{address}" },
+          labelingInfo: [{ labelExpressionInfo: { expression: "$feature.name" },
+            symbol: { type: "text", color: [0,229,255,1], haloColor: [0,0,0,0.8], haloSize: 1.5,
+              font: { size: 9, weight: "bold" } },
+            labelPlacement: "above-right", minScale: 300000
+          }]
+        });
+        map.add(storeLayer);
+
+        // --- Widgets ---
+        mapView.ui.add(new Home({ view: mapView }), "top-left");
+        const legend = new Legend({ view: mapView, style: "card" });
+        mapView.ui.add(new Expand({ view: mapView, content: legend, expandIcon: "legend", group: "bottom-left" }), "bottom-left");
+
+        // --- Populate store dropdown ---
+        const sel = document.getElementById("storeSelect");
+        STORES.forEach(s => {
+          const opt = document.createElement("calcite-option");
+          opt.value = String(s.id);
+          opt.textContent = s.name;
+          sel.appendChild(opt);
+        });
+
+        // --- Event Handlers ---
+        sel.addEventListener("calciteSelectChange", () => {
+          document.getElementById("analyzeBtn").disabled = !sel.value;
+        });
+
+        document.getElementById("analyzeBtn").addEventListener("click", () => {
+          const id = parseInt(sel.value);
+          const store = STORES.find(s => s.id === id);
+          if (store) runAnalysis(store.lat, store.lon, store.name, geometryEngine, Graphic);
+        });
+
+        document.getElementById("customSwitch").addEventListener("calciteSwitchChange", (e) => {
+          customMode = e.target.checked;
+          document.getElementById("customBanner").style.display = customMode ? "block" : "none";
+          mapView.container.style.cursor = customMode ? "crosshair" : "default";
+        });
+
+        document.getElementById("heatSwitch").addEventListener("calciteSwitchChange", (e) => {
+          if (e.target.checked) {
+            arityLayer.renderer = {
+              type: "heatmap",
+              field: "total_visits",
+              colorStops: [
+                { color: "rgba(10,10,40,0)", ratio: 0 },
+                { color: "#3b0764", ratio: 0.1 },
+                { color: "#7c3aed", ratio: 0.3 },
+                { color: "#c084fc", ratio: 0.5 },
+                { color: "#fbbf24", ratio: 0.7 },
+                { color: "#f97316", ratio: 0.85 },
+                { color: "#ef4444", ratio: 1 }
+              ],
+              radius: 14, minDensity: 0, maxDensity: 0.005
+            };
+          } else {
+            arityLayer.renderer = pointRenderer;
+          }
+        });
+
+        document.getElementById("storeVis").addEventListener("calciteSwitchChange", (e) => {
+          storeLayer.visible = e.target.checked;
+        });
+
+        mapView.on("click", (event) => {
+          if (customMode) {
+            runAnalysis(event.mapPoint.latitude, event.mapPoint.longitude, "Custom Location", geometryEngine, Graphic);
+          }
+        });
+
+        // ============================================================
+        // ANALYSIS
+        // ============================================================
+        async function runAnalysis(lat, lon, label, geoEng, Gfx) {
+          const radius = parseFloat(document.getElementById("radiusSelect").value || "1");
+          document.getElementById("loadingBox").classList.remove("hidden");
+          document.getElementById("resultsBox").classList.add("hidden");
+
+          // Buffer
+          gfxLayer.removeAll();
+          const pt = new Point({ longitude: lon, latitude: lat });
+          const buffer = geoEng.geodesicBuffer(pt, radius, "miles");
+          gfxLayer.add(new Gfx({ geometry: buffer, symbol: {
+            type: "simple-fill", color: [0,229,255,0.08],
+            outline: { color: [0,229,255,0.7], width: 2, style: "dash" }
+          }}));
+          gfxLayer.add(new Gfx({ geometry: pt, symbol: {
+            type: "simple-marker", style: "x", size: 16, color: [0,229,255,1],
+            outline: { color: [255,255,255,1], width: 2 }
+          }}));
+          mapView.goTo({ target: buffer, zoom: Math.max(12, mapView.zoom) }, { duration: 800 });
+
+          // Run geoenrichment + arity query in parallel
+          const [enrichData, trafficData] = await Promise.all([
+            fetchGeoenrichment(lat, lon, radius),
+            queryArityInBuffer(buffer)
+          ]);
+
+          document.getElementById("loadingBox").classList.add("hidden");
+          document.getElementById("resultsBox").classList.remove("hidden");
+
+          // Compute score
+          const score = computeScore(enrichData, trafficData);
+          renderScore(score);
+          renderDemographics(enrichData, label, radius);
+          renderTraffic(trafficData);
+          renderRecommendations(score, enrichData, trafficData, label);
+        }
+
+        // --- GeoEnrichment ---
+        async function fetchGeoenrichment(lat, lon, radius) {
+          const vars = getSelectedVars();
+          if (vars.length === 0) return {};
+          try {
+            const params = new URLSearchParams({
+              f: "json", token: apiKey,
+              studyAreas: JSON.stringify([{
+                geometry: { x: lon, y: lat, spatialReference: { wkid: 4326 } },
+                areaType: "RingBuffer", bufferUnits: "esriMiles", bufferRadii: [radius]
+              }]),
+              analysisVariables: JSON.stringify(vars)
+            });
+            const resp = await fetch(GEOENRICH_URL, { method: "POST", body: params });
+            const data = await resp.json();
+            if (data.results && data.results[0] && data.results[0].value) {
+              const fs = data.results[0].value.FeatureSet;
+              if (fs && fs[0] && fs[0].features && fs[0].features[0]) {
+                return fs[0].features[0].attributes || {};
+              }
+            }
+            if (data.error) console.warn("GeoEnrichment error:", data.error);
+            return {};
+          } catch (err) { console.error("GeoEnrichment failed:", err); return {}; }
+        }
+
+        function getSelectedVars() {
+          let vars = [];
+          if (document.getElementById("chkDemo").checked) vars.push(...VAR_GROUPS.demo);
+          if (document.getElementById("chkIncome").checked) vars.push(...VAR_GROUPS.income);
+          if (document.getElementById("chkSpending").checked) vars.push(...VAR_GROUPS.spending);
+          if (document.getElementById("chkDaytime").checked) vars.push(...VAR_GROUPS.daytime);
+          if (document.getElementById("chkHousing").checked) vars.push(...VAR_GROUPS.housing);
+          const custom = document.getElementById("customVar").value.trim();
+          if (custom) vars.push(custom);
+          return [...new Set(vars)];
+        }
+
+        // --- Arity Query ---
+        async function queryArityInBuffer(bufferGeom) {
+          try {
+            await arityLayer.when();
+            const q = arityLayer.createQuery();
+            q.geometry = bufferGeom;
+            q.spatialRelationship = "intersects";
+            q.outFields = ["brand","sub_category","total_visits","avg_daily_visits"];
+            q.returnGeometry = false;
+            const result = await arityLayer.queryFeatures(q);
+            const features = result.features || [];
+            let totalVisits = 0, brandMap = {}, catMap = {};
+            features.forEach(f => {
+              const a = f.attributes;
+              totalVisits += (a.total_visits || 0);
+              brandMap[a.brand] = (brandMap[a.brand] || 0) + (a.total_visits || 0);
+              catMap[a.sub_category] = (catMap[a.sub_category] || 0) + (a.total_visits || 0);
+            });
+            const topBrands = Object.entries(brandMap).sort((a,b) => b[1]-a[1]).slice(0, 8);
+            return { totalVisits, locationCount: features.length, topBrands, catMap };
+          } catch (err) { console.error("Arity query failed:", err); return { totalVisits:0, locationCount:0, topBrands:[], catMap:{} }; }
+        }
+
+        // --- Score ---
+        function computeScore(demo, traffic) {
+          const trafficScore = Math.min(100, Math.round((traffic.totalVisits / 40000) * 100));
+          const income = demo.MEDHINC_CY || 0;
+          const affluenceScore = Math.min(100, Math.round((income / 120000) * 100));
+          const pop = demo.TOTPOP_CY || 0;
+          const marketScore = Math.min(100, Math.round((pop / 150000) * 100));
+          const overall = Math.round(trafficScore * 0.35 + affluenceScore * 0.35 + marketScore * 0.30);
+          return { overall, traffic: trafficScore, affluence: affluenceScore, market: marketScore };
+        }
+
+        // --- Renderers ---
+        function renderScore(s) {
+          const color = s.overall >= 75 ? "#00e676" : s.overall >= 50 ? "#00bcd4" : s.overall >= 30 ? "#ffd600" : "#ff1744";
+          const dash = 283 - (283 * s.overall / 100);
+          document.getElementById("scoreContent").innerHTML = `
+            <div class="score-wrap">
+              <div class="score-circle">
+                <svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="7"/>
+                <circle cx="50" cy="50" r="45" fill="none" stroke="${color}" stroke-width="7" stroke-linecap="round"
+                  stroke-dasharray="283" stroke-dashoffset="${dash}" transform="rotate(-90 50 50)" style="transition:stroke-dashoffset 1.2s ease"/></svg>
+                <div class="score-num"><div class="val" style="color:${color}">${s.overall}</div><div class="lbl">/100</div></div>
+              </div>
+              <div class="score-bars">
+                ${scoreBar("Traffic", s.traffic, "#ff6d00")}
+                ${scoreBar("Affluence", s.affluence, "#7c3aed")}
+                ${scoreBar("Market", s.market, "#00bcd4")}
+              </div>
+            </div>`;
+        }
+        function scoreBar(label, val, color) {
+          return `<div class="sbar"><div class="sbar-label">${label}</div><div class="sbar-track"><div class="sbar-fill" style="width:${val}%;background:${color}"></div></div><div class="sbar-val" style="color:${color}">${val}</div></div>`;
+        }
+
+        function renderDemographics(data, label, radius) {
+          let html = `<div style="font-size:0.82em;color:#8b949e;margin-bottom:8px;">${label} &mdash; ${radius} mi radius</div>`;
+          const keys = Object.keys(data).filter(k => k !== "OBJECTID" && k !== "ID" && k !== "sourceCountry" && k !== "areaType" && k !== "bufferUnits" && k !== "bufferRadii" && !k.startsWith("Has") && !k.startsWith("OBJECTID") && !k.startsWith("aggregation") && data[k] !== null && data[k] !== undefined);
+          if (keys.length === 0) {
+            html += '<div style="color:#7b8a9e;font-size:0.85em;">No geoenrichment data returned. Check your API key privileges.</div>';
+          } else {
+            html += '<div class="stat-grid">';
+            keys.forEach(k => {
+              const shortKey = k.replace("KeyUSFacts.", "").replace("KeyGlobalFacts.", "");
+              const meta = VAR_META[shortKey] || { label: shortKey, fmt: "num" };
+              const v = data[k];
+              let display;
+              if (meta.fmt === "cur") display = "$" + Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 });
+              else if (meta.fmt === "dec") display = Number(v).toFixed(1);
+              else display = Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 });
+              html += `<div class="stat-card"><div class="stat-value">${display}</div><div class="stat-label">${meta.label}</div></div>`;
+            });
+            html += '</div>';
+          }
+          document.getElementById("demoContent").innerHTML = html;
+        }
+
+        function renderTraffic(t) {
+          let html = `<div class="stat-grid two-col" style="margin-bottom:12px;">
+            <div class="stat-card"><div class="stat-value">${t.totalVisits.toLocaleString()}</div><div class="stat-label">Total Visits</div></div>
+            <div class="stat-card"><div class="stat-value">${t.locationCount}</div><div class="stat-label">Locations</div></div>
+          </div>`;
+          if (t.topBrands.length > 0) {
+            const maxV = t.topBrands[0][1];
+            html += '<div class="section-title">Top Brands by Traffic</div>';
+            t.topBrands.forEach(([name, visits]) => {
+              const pct = Math.round((visits / maxV) * 100);
+              html += `<div class="brand-row"><div class="brand-name">${name}</div><div class="brand-track"><div class="brand-fill" style="width:${pct}%"></div></div><div class="brand-val">${visits.toLocaleString()}</div></div>`;
+            });
+          }
+          const cats = Object.entries(t.catMap);
+          if (cats.length > 0) {
+            const total = cats.reduce((s, [,v]) => s + v, 0) || 1;
+            html += '<div class="section-title" style="margin-top:12px;">Category Mix</div>';
+            cats.forEach(([cat, v]) => {
+              const pct = Math.round((v / total) * 100);
+              const dotColor = cat.includes("Restaurant") ? "#ff6d00" : "#00bcd4";
+              html += `<div class="cat-row"><div><span class="cat-dot" style="background:${dotColor}"></span>${cat}</div><div style="font-weight:600;">${pct}%</div></div>`;
+            });
+          }
+          document.getElementById("trafficContent").innerHTML = html;
+        }
+
+        function renderRecommendations(score, demo, traffic, label) {
+          const recs = [];
+          if (score.traffic >= 65) recs.push({ t: "pos", m: `Strong vehicular traffic zone with ${traffic.totalVisits.toLocaleString()} weekly visits nearby &mdash; high visibility and foot traffic potential for ${label}.` });
+          else if (score.traffic >= 35) recs.push({ t: "warn", m: `Moderate traffic levels (${traffic.totalVisits.toLocaleString()} weekly visits). Consider complementary marketing to drive additional foot traffic.` });
+          else recs.push({ t: "neg", m: `Low traffic density in this area. This location may require significant marketing investment to attract customers.` });
+
+          const income = demo.MEDHINC_CY || 0;
+          if (income >= 80000) recs.push({ t: "pos", m: `Median household income of $${income.toLocaleString()} aligns well with Nordstrom Rack's value-conscious affluent target demographic.` });
+          else if (income >= 50000) recs.push({ t: "warn", m: `Moderate income area (median $${income.toLocaleString()}). Pricing strategy should emphasize value proposition.` });
+          else if (income > 0) recs.push({ t: "neg", m: `Below-target income area (median $${income.toLocaleString()}). May not align with Nordstrom Rack's core customer profile.` });
+
+          if (traffic.locationCount >= 40) recs.push({ t: "pos", m: `Dense commercial corridor with ${traffic.locationCount} nearby businesses &mdash; established retail ecosystem with high complementary traffic.` });
+
+          const pop = demo.TOTPOP_CY || 0;
+          if (pop >= 80000) recs.push({ t: "pos", m: `Large trade area population of ${pop.toLocaleString()} provides a substantial and sustainable customer base.` });
+          else if (pop > 0 && pop < 30000) recs.push({ t: "warn", m: `Smaller trade area population (${pop.toLocaleString()}). Evaluate whether regional draw and drive-time access compensate.` });
+
+          const daytime = demo.DPOP_CY || 0;
+          if (daytime > pop * 1.2 && daytime > 0) recs.push({ t: "pos", m: `Daytime population surge (${daytime.toLocaleString()} vs ${pop.toLocaleString()} residents) indicates strong employment center &mdash; excellent for lunch-hour and after-work shopping traffic.` });
+
+          let html = "";
+          if (recs.length === 0) html = '<div style="color:#7b8a9e;font-size:0.85em;">Run analysis to see recommendations.</div>';
+          else recs.forEach(r => { html += `<div class="rec rec-${r.t}">${r.m}</div>`; });
+
+          if (score.overall >= 70) html += `<div class="rec rec-pos" style="margin-top:8px;font-weight:600;">Overall: Strong site with a score of ${score.overall}/100 &mdash; recommended for investment.</div>`;
+          else if (score.overall >= 45) html += `<div class="rec rec-warn" style="margin-top:8px;font-weight:600;">Overall: Moderate potential (${score.overall}/100) &mdash; further due diligence recommended.</div>`;
+          else html += `<div class="rec rec-neg" style="margin-top:8px;font-weight:600;">Overall: Below threshold (${score.overall}/100) &mdash; consider alternative locations.</div>`;
+
+          document.getElementById("recsContent").innerHTML = html;
+        }
+
+      }); // end require
+    }
+  </script>
+</body>
+</html>
