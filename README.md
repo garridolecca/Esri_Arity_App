@@ -8,13 +8,22 @@ A production-grade ArcGIS JavaScript API application that leverages **Arity conn
 
 ![App Screenshot](screenshot.png)
 
+## Two Ways to Launch
+
+| Mode | What You Need | Demographics | Basemap |
+|------|--------------|-------------|---------|
+| **Live Mode** | ArcGIS API Key | Real GeoEnrichment data | ArcGIS Dark Gray Vector |
+| **Demo Mode** | Nothing | Realistic simulated data | CartoDB Dark Matter (free) |
+
+Click **"Explore with Demo Data"** on the splash screen to try the full app instantly with no API key. All Arity traffic data is real; only the demographic enrichment is simulated.
+
 ## What This App Does
 
 This application demonstrates how connected car mobility data can transform retail site selection and competitive analysis. It combines three data sources in real-time:
 
 1. **Arity Connected Car Data** - 7,964 locations, 186 brands, 3.65M weekly visits across LA metro
 2. **20 Nordstrom Rack Store Locations** - Verified locations across LA, Orange County, Inland Empire, and Ventura County
-3. **ArcGIS GeoEnrichment** - Demographics, income, consumer spending, daytime population, and housing data
+3. **ArcGIS GeoEnrichment** - Demographics, income, consumer spending, daytime population, and housing data (or simulated equivalents in Demo Mode)
 
 ## Key Features
 
