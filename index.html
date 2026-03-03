@@ -123,6 +123,22 @@
           <calcite-block heading="Layer Controls" icon-start="layers" collapsible>
             <calcite-label layout="inline"><calcite-switch id="heatSwitch"></calcite-switch>Heatmap View</calcite-label>
             <calcite-label layout="inline"><calcite-switch id="storeVis" checked></calcite-switch>Nordstrom Rack Locations</calcite-label>
+            <calcite-label layout="inline"><calcite-switch id="agolSwitch"></calcite-switch>Use ArcGIS Online Layer</calcite-label>
+          </calcite-block>
+          <!-- Publish to AGOL -->
+          <calcite-block heading="Publish to ArcGIS Online" icon-start="upload-to" collapsible>
+            <calcite-notice icon="information" scale="s" open style="margin-bottom:8px;"><div slot="message" style="font-size:0.8em;">Upload the Arity dataset to your ArcGIS Online account as a hosted feature service with graduated symbology.</div></calcite-notice>
+            <calcite-label>ArcGIS Online Username
+              <calcite-input id="agolUser" placeholder="username" icon="user" scale="s"></calcite-input>
+            </calcite-label>
+            <calcite-label style="margin-top:6px;">Password
+              <calcite-input id="agolPass" type="password" placeholder="password" icon="lock" scale="s"></calcite-input>
+            </calcite-label>
+            <calcite-label style="margin-top:6px;">Portal URL
+              <calcite-input id="agolPortal" value="https://www.arcgis.com" icon="services" scale="s"></calcite-input>
+            </calcite-label>
+            <calcite-button id="publishBtn" icon-start="upload-to" width="full" appearance="outline" style="margin-top:10px;" scale="s">Publish Data to AGOL</calcite-button>
+            <div id="publishStatus" style="margin-top:8px;font-size:0.8em;color:#7b8a9e;"></div>
           </calcite-block>
           <!-- Loading -->
           <div id="loadingBox" class="hidden" style="text-align:center;padding:24px;">
@@ -196,8 +212,9 @@
       "DIVINDX_CY": { label:"Diversity Index",    fmt:"dec" }
     };
 
-    let apiKey, mapView, arityLayer, storeLayer, gfxLayer;
-    let pointRenderer, customMode = false;
+    const AGOL_SERVICE_URL = "https://services2.arcgis.com/cPVqgcKAQtE6xCja/arcgis/rest/services/Arity_Visit_Data_LA_Metro_2026/FeatureServer/0";
+    let apiKey, mapView, arityLayer, agolLayer, storeLayer, gfxLayer;
+    let pointRenderer, customMode = false, usingAgol = false;
 
     // ============================================================
     // LAUNCH
@@ -353,6 +370,77 @@
           storeLayer.visible = e.target.checked;
         });
 
+        // --- AGOL Layer Toggle ---
+        document.getElementById("agolSwitch").addEventListener("calciteSwitchChange", (e) => {
+          usingAgol = e.target.checked;
+          if (usingAgol) {
+            if (!agolLayer) {
+              agolLayer = new FeatureLayer({
+                url: AGOL_SERVICE_URL, title: "Arity Visit Data (AGOL)",
+                renderer: pointRenderer,
+                popupTemplate: arityLayer.popupTemplate,
+                visible: true
+              });
+              map.add(agolLayer, map.layers.indexOf(arityLayer));
+            }
+            agolLayer.visible = true;
+            arityLayer.visible = false;
+          } else {
+            if (agolLayer) agolLayer.visible = false;
+            arityLayer.visible = true;
+          }
+        });
+
+        // --- Publish to AGOL ---
+        document.getElementById("publishBtn").addEventListener("click", async () => {
+          const user = document.getElementById("agolUser").value.trim();
+          const pass = document.getElementById("agolPass").value.trim();
+          const portal = document.getElementById("agolPortal").value.trim() || "https://www.arcgis.com";
+          const statusEl = document.getElementById("publishStatus");
+          if (!user || !pass) { statusEl.innerHTML = '<span style="color:#ff1744;">Enter username and password.</span>'; return; }
+          statusEl.innerHTML = '<calcite-loader inline scale="s"></calcite-loader> Generating token...';
+          try {
+            // Generate token
+            let resp = await fetch(`${portal}/sharing/rest/generateToken`, {
+              method: "POST", body: new URLSearchParams({ username: user, password: pass, client: "referer", referer: location.href, expiration: 60, f: "json" })
+            });
+            let tokenData = await resp.json();
+            if (!tokenData.token) throw new Error(tokenData.error?.message || "Token generation failed");
+            const tk = tokenData.token;
+            statusEl.innerHTML = '<calcite-loader inline scale="s"></calcite-loader> Uploading GeoJSON...';
+            // Fetch GeoJSON
+            const geojsonResp = await fetch("data/arity_visits.geojson");
+            const geojsonBlob = await geojsonResp.blob();
+            // Upload
+            const form = new FormData();
+            form.append("f", "json"); form.append("token", tk); form.append("type", "GeoJson");
+            form.append("title", "Arity Car Movement Data - LA Metro Feb 2026");
+            form.append("tags", "Arity,connected car,visit counts,Los Angeles,retail");
+            form.append("snippet", "Arity connected car visit data for 7,964 LA metro locations");
+            form.append("file", geojsonBlob, "arity_visits.geojson");
+            resp = await fetch(`${portal}/sharing/rest/content/users/${user}/addItem`, { method: "POST", body: form });
+            let addResult = await resp.json();
+            if (!addResult.success) throw new Error(addResult.error?.message || "Upload failed");
+            statusEl.innerHTML = '<calcite-loader inline scale="s"></calcite-loader> Publishing feature service...';
+            // Publish
+            resp = await fetch(`${portal}/sharing/rest/content/users/${user}/publish`, {
+              method: "POST", body: new URLSearchParams({
+                f: "json", token: tk, itemID: addResult.id, filetype: "geojson", outputType: "featureService",
+                publishParameters: JSON.stringify({ name: "Arity_Visit_Data_" + Date.now(), targetSR: {wkid:102100}, maxRecordCount: 10000 })
+              })
+            });
+            let pubResult = await resp.json();
+            if (pubResult.services && pubResult.services[0]) {
+              const svc = pubResult.services[0];
+              // Share publicly
+              await fetch(`${portal}/sharing/rest/content/users/${user}/items/${svc.serviceItemId}/share`, {
+                method: "POST", body: new URLSearchParams({ f: "json", token: tk, everyone: "true", org: "true" })
+              });
+              statusEl.innerHTML = `<span style="color:#00e676;">Published!</span><br><a href="${portal}/home/item.html?id=${svc.serviceItemId}" target="_blank" style="color:#00bcd4;">View in ArcGIS Online</a><br><span style="font-size:0.75em;color:#7b8a9e;">${svc.serviceurl}</span>`;
+            } else throw new Error(pubResult.error?.message || "Publish failed");
+          } catch (err) { statusEl.innerHTML = `<span style="color:#ff1744;">Error: ${err.message}</span>`; }
+        });
+
         mapView.on("click", (event) => {
           if (customMode) {
             runAnalysis(event.mapPoint.latitude, event.mapPoint.longitude, "Custom Location", geometryEngine, Graphic);
@@ -439,13 +527,14 @@
         // --- Arity Query ---
         async function queryArityInBuffer(bufferGeom) {
           try {
-            await arityLayer.when();
-            const q = arityLayer.createQuery();
+            const lyr = (usingAgol && agolLayer) ? agolLayer : arityLayer;
+            await lyr.when();
+            const q = lyr.createQuery();
             q.geometry = bufferGeom;
             q.spatialRelationship = "intersects";
             q.outFields = ["brand","sub_category","total_visits","avg_daily_visits"];
             q.returnGeometry = false;
-            const result = await arityLayer.queryFeatures(q);
+            const result = await lyr.queryFeatures(q);
             const features = result.features || [];
             let totalVisits = 0, brandMap = {}, catMap = {};
             features.forEach(f => {

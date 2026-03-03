@@ -4,7 +4,7 @@
  */
 import { chromium } from "playwright";
 
-const BASE_URL = "http://localhost:9090";
+const BASE_URL = process.env.TEST_PORT ? `http://localhost:${process.env.TEST_PORT}` : "http://localhost:9091";
 
 async function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
