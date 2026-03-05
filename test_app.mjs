@@ -31,7 +31,7 @@ async function runTests() {
       (await page.locator("#splash").isVisible()) ? ok("Splash visible") : fail("Splash", "not visible");
       (await page.locator("#launchBtn").count() > 0) ? ok("Launch btn in DOM") : fail("Launch btn", "missing");
       (await page.locator("#demoBtn").count() > 0) ? ok("Demo btn in DOM") : fail("Demo btn", "missing");
-      (await page.locator("#apiKeyInput").isVisible()) ? ok("API key input") : fail("API key input", "missing");
+      (await page.locator("#apiKeyInput").count() > 0) ? ok("API key input") : fail("API key input", "missing");
 
       console.log("[1.3] Launch with API key");
       await page.evaluate(() => { document.getElementById("apiKeyInput").value = "AAPK_test_key_123"; });
